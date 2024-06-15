@@ -6,12 +6,15 @@ import (
 	"strings"
 )
 
-// type HandlerMw func(http.Handler) http.Handler
+// A func type of `func(http.Handler) http.Handler`
+type HandlerMw func(http.Handler) http.Handler
+
+// A func type of `map[string]func(http.ResponseWriter, *http.Request)`
 type MapHandlerFunc map[string]func(http.ResponseWriter, *http.Request)
 
 // Create stack of middleware to be used at once
 // Note that this is very common practice
-func StackMiddlewares(mws ...func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+func StackMiddlewares(mws ...HandlerMw) HandlerMw {
 	return func(next http.Handler) http.Handler {
 		for i := len(mws) - 1; i >= 0; i-- {
 			next = mws[i](next)
@@ -31,12 +34,12 @@ func GroupRoutes(path string, router *http.ServeMux, mwAndRouter ...any) {
 	}
 	routes, okMux := mwAndRouter[sLength-1].(MapHandlerFunc)
 	if !okMux {
-		panic("last parameter should satistifes `map[string]func(http.ResponseWriter, *http.Request)`")
+		panic("last parameter should satisfies `map[string]func(http.ResponseWriter, *http.Request)`")
 	}
 
 	// check middleware availability
 	mwCandidates := mwAndRouter[:sLength-1]
-	mwList := []func(http.Handler) http.Handler{}
+	mwList := []HandlerMw{}
 	for i := range mwCandidates {
 		if g, okHandler := mwCandidates[i].(func(http.Handler) http.Handler); !okHandler {
 			panic("non middleware included")
@@ -46,13 +49,15 @@ func GroupRoutes(path string, router *http.ServeMux, mwAndRouter ...any) {
 	}
 	mStack := StackMiddlewares(mwList...)
 
-	//
+	// process routing
+	mainPathMethod := map[string]interface{}{} // to record the registered method
 	subRouterStatus := false
 	subRouter := http.NewServeMux()
 	for key := range routes {
 		keys := strings.Fields(key)
 		if len(keys) == 1 {
 			if key == "/" {
+				mainPathMethod["ALL"] = nil // not specified method means any method is allowed
 				tempMux := http.NewServeMux()
 				tempMux.HandleFunc("/", routes[key])
 				router.Handle(path, mStack(tempMux))
@@ -62,15 +67,28 @@ func GroupRoutes(path string, router *http.ServeMux, mwAndRouter ...any) {
 			}
 		} else {
 			if keys[1] == "/" {
+				mainPathMethod[keys[0]] = nil // specific method
 				tempMux := http.NewServeMux()
 				tempMux.HandleFunc(keys[0]+" /", routes[key])
-				router.Handle(path, mStack(tempMux))
+				router.Handle(keys[0]+" "+path, mStack(tempMux))
 			} else {
 				subRouterStatus = true
 				subRouter.HandleFunc(keys[0]+" "+keys[1], routes[key])
 			}
 		}
 	}
+
+	// if no unspecified method registered, means not all method can be processed
+	if _, ok := mainPathMethod["ALL"]; !ok {
+		router.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := mainPathMethod[r.Method]; !ok {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte("Method not allowed"))
+			}
+		})
+	}
+
+	// if subrouter has other than main path, then process
 	if subRouterStatus {
 		fmt.Println("new", path+"/", path)
 		router.Handle(path+"/", http.StripPrefix(path, mStack(subRouter)))
@@ -94,7 +112,7 @@ func GroupRoutesUsingHandler(path string, router *http.ServeMux, mwAndRouter ...
 
 	// check middleware
 	mwCandidates := mwAndRouter[:sLength-1]
-	mwList := []func(http.Handler) http.Handler{}
+	mwList := []HandlerMw{}
 	for i := range mwCandidates {
 		if g, okHandler := mwCandidates[i].(func(http.Handler) http.Handler); !okHandler {
 			panic("non middleware included")
