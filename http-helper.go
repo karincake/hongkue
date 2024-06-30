@@ -1,8 +1,8 @@
 package hongkue
 
 import (
-	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 )
 
@@ -41,10 +41,24 @@ func GroupRoutes(path string, router *http.ServeMux, mwAndRouter ...any) {
 	mwCandidates := mwAndRouter[:sLength-1]
 	mwList := []HandlerMw{}
 	for i := range mwCandidates {
-		if g, okHandler := mwCandidates[i].(func(http.Handler) http.Handler); !okHandler {
-			panic("non middleware included")
+		if handler, okHandler := mwCandidates[i].(func(http.Handler) http.Handler); !okHandler {
+			// check once more if it's array
+			rt := reflect.TypeOf(mwCandidates[i]).Kind()
+			switch rt {
+			case reflect.Slice:
+				s := reflect.ValueOf(mwCandidates[i])
+				for i := 0; i < s.Len(); i++ {
+					if handlerAgain, okHandler := mwCandidates[i].(func(http.Handler) http.Handler); !okHandler {
+						panic("non middleware included")
+					} else {
+						mwList = append(mwList, handlerAgain)
+					}
+				}
+			default:
+				panic("non middleware included")
+			}
 		} else {
-			mwList = append(mwList, g)
+			mwList = append(mwList, handler)
 		}
 	}
 	mStack := StackMiddlewares(mwList...)
@@ -90,7 +104,6 @@ func GroupRoutes(path string, router *http.ServeMux, mwAndRouter ...any) {
 
 	// if subrouter has other than main path, then process
 	if subRouterStatus {
-		fmt.Println("new", path+"/", path)
 		router.Handle(path+"/", http.StripPrefix(path, mStack(subRouter)))
 	}
 }
@@ -125,6 +138,5 @@ func GroupRoutesUsingHandler(path string, router *http.ServeMux, mwAndRouter ...
 	// execute sub rouiter then use the middleware
 	subRouter := http.NewServeMux()
 	subRouterCall(subRouter)
-	fmt.Println("convent", path+"/", path)
 	router.Handle(path+"/", http.StripPrefix(path, mStack(subRouter)))
 }
