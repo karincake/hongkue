@@ -2,7 +2,6 @@ package hongkue
 
 import (
 	"net/http"
-	"reflect"
 	"strings"
 )
 
@@ -23,45 +22,48 @@ func StackMiddlewares(mws ...HandlerMw) HandlerMw {
 	}
 }
 
-// Create subroute of a path
-// WARNING: this is work around to avoid redirect behavior regarding
-// trailing slash from http.StripPrefix
-func GroupRoutes(path string, router *http.ServeMux, mwAndRouter ...any) {
-	// must have at least router
+// Register path
+func Route(path string, router *http.ServeMux, mwAndRouter ...any) {
+	// check for the subrouter
 	sLength := len(mwAndRouter)
 	if sLength == 0 {
 		panic("requires third parameter for the subrouter")
 	}
+
+	// check last param for its availability for http
+	route, okMux := mwAndRouter[sLength-1].(func(http.ResponseWriter, *http.Request))
+	if !okMux {
+		panic("last parameter should satisfies `func(http.ResponseWriter, *http.Request)`")
+	}
+
+	// check middleware availability
+	middlewares := checkMiddlewares(mwAndRouter[:sLength-1])
+	mStack := StackMiddlewares(middlewares...)
+
+	tempMux := http.NewServeMux()
+	tempMux.HandleFunc("/", route)
+	router.Handle(path, mStack(tempMux))
+}
+
+// Create subroute of a path
+// WARNING: this is work around to avoid redirect behavior regarding
+// trailing slash from http.StripPrefix
+func GroupRoutes(path string, router *http.ServeMux, mwAndRouter ...any) {
+	// check for the subrouter
+	sLength := len(mwAndRouter)
+	if sLength == 0 {
+		panic("requires third parameter for the subrouter")
+	}
+
+	// check last param for its availability for http
 	routes, okMux := mwAndRouter[sLength-1].(MapHandlerFunc)
 	if !okMux {
 		panic("last parameter should satisfies `map[string]func(http.ResponseWriter, *http.Request)`")
 	}
 
 	// check middleware availability
-	mwCandidates := mwAndRouter[:sLength-1]
-	mwList := []HandlerMw{}
-	for i := range mwCandidates {
-		if handler, okHandler := mwCandidates[i].(func(http.Handler) http.Handler); !okHandler {
-			// check once more if it's array
-			rt := reflect.TypeOf(mwCandidates[i]).Kind()
-			switch rt {
-			case reflect.Slice:
-				s := reflect.ValueOf(mwCandidates[i])
-				for i := 0; i < s.Len(); i++ {
-					if handlerAgain, okHandler := mwCandidates[i].(func(http.Handler) http.Handler); !okHandler {
-						panic("non middleware included")
-					} else {
-						mwList = append(mwList, handlerAgain)
-					}
-				}
-			default:
-				panic("non middleware included")
-			}
-		} else {
-			mwList = append(mwList, handler)
-		}
-	}
-	mStack := StackMiddlewares(mwList...)
+	middlewares := checkMiddlewares(mwAndRouter[:sLength-1])
+	mStack := StackMiddlewares(middlewares...)
 
 	// process routing
 	mainPathMethod := map[string]interface{}{} // to record the registered method
