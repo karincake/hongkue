@@ -14,10 +14,15 @@ func RegCrud(path string, r *http.ServeMux, mwAndRouter ...any) {
 	extraHandlers := hk.MapHandlerFunc{}
 
 	if sLength > 1 {
-		if _, ok := mwAndRouter[sLength-2].(hk.MapHandlerFunc); ok {
+		if _, ok := mwAndRouter[sLength-1].(hk.MapHandlerFunc); ok {
 			mwCandidatesStart = 2
-			extraHandlers = mwAndRouter[sLength-2].(hk.MapHandlerFunc)
+			extraHandlers = mwAndRouter[sLength-1].(hk.MapHandlerFunc)
 		}
+	}
+
+	c, ok := mwAndRouter[sLength-mwCandidatesStart].(CrudBase)
+	if !ok {
+		panic("non CrudBase used in the last paramter")
 	}
 
 	mwCandidates := mwAndRouter[:sLength-mwCandidatesStart]
@@ -35,11 +40,6 @@ func RegCrud(path string, r *http.ServeMux, mwAndRouter ...any) {
 		// } else {
 		// 	mwList = append(mwList, g)
 		// }
-	}
-
-	c, ok := mwAndRouter[sLength-1].(CrudBase)
-	if !ok {
-		panic("non CrudBase used in the last paramter")
 	}
 
 	crudHandlers := hk.MapHandlerFunc{

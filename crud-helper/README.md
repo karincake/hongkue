@@ -2,10 +2,10 @@
 Extra library to help in creating CRUD APIs
 
 ## RegCrud()
-A function to register CRUD APIs. It's a wrapper of `hongkue.GroupRoutes()` with some extra features.
+A function to register CRUD APIs where it is actually a wrapper of `hongkue.GroupRoutes()` with CRUD feature.
 
 ## Types
-A type `CrudBase` is defined to be used as the last parameter of `RegCrud()`. It's a interface that defines the CRUD APIs.
+A type `CrudBase` is an interface that defines the CRUD APIs
 
 ```go
 type CrudBase interface {
@@ -16,6 +16,11 @@ type CrudBase interface {
 	Delete(w http.ResponseWriter, r *http.Request)
 }
 ```
+
+It is being used as the last parameter OR the second last parameter of `RegCrud()`:.
+
+If it is used as the second last parameter, then the last parameter will be the type of `MapHandlerFunc`,
+therefore more routings can be added by using the `MapHandlerFunc`.
 
 ## Example
 ```go
@@ -30,11 +35,16 @@ func main() {
 	r.HandleFunc("/", home.Home)
 	r.HandleFunc("/hello-world", hw.HelloWorld)
 
-	hc.RegCrud("/article-mw", r,
+ 	// the last parameter is the instance that implements the CrudBase interface
+	hc.RegCrud("/article", r, O)
+	
+	// the secondlast parameter is the instance that implements the CrudBase interface
+	// and the last parameter is the instance that implements the MapHandlerFunc
+	hc.RegCrud("/another-article", r, O,
 		h.MapHandlerFunc{
 			"GET /{id}/extra": Extra,
 		},
-		O) // the last parameter is the instance that implements the CrudBase interface
+	) 
 }
 
 // the crud
