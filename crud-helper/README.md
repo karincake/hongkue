@@ -11,7 +11,7 @@ A type `CrudBase` is an interface that defines the CRUD APIs
 type CrudBase interface {
 	Create(w http.ResponseWriter, r *http.Request)
 	ReadList(w http.ResponseWriter, r *http.Request)
-	ReadDetail(w http.ResponseWriter, r *http.Request)
+	ReadSingle(w http.ResponseWriter, r *http.Request)
 	Update(w http.ResponseWriter, r *http.Request)
 	Delete(w http.ResponseWriter, r *http.Request)
 }
@@ -60,7 +60,7 @@ func (obj myBase) ReadList(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("You are accessing path for comment list"))
 }
 
-func (obj myBase) ReadDetail(w http.ResponseWriter, r *http.Request) {
+func (obj myBase) ReadSingle(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("You accessing path for comment detail with id: " + r.PathValue("id")))
 }
 

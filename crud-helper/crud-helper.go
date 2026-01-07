@@ -45,7 +45,7 @@ func RegCrud(path string, r *http.ServeMux, mwAndRouter ...any) {
 	crudHandlers := hk.MapHandlerFunc{
 		"POST /":       c.Create,
 		"GET /":        c.ReadList,
-		"GET /{id}":    c.ReadDetail,
+		"GET /{id}":    c.ReadSingle,
 		"PATCH /{id}":  c.Update,
 		"DELETE /{id}": c.Delete,
 	}
